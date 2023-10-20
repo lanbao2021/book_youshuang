@@ -15,7 +15,7 @@
 
 #define USER_LIMIT 5 // 最大用户数量
 #define BUFFER_SIZE 64 // 读缓冲区的大小
-#define FD_LIMIT 65535 // 文件描述符数量的限制
+#define FD_LIMIT 65535 // 文件描述符数量的限制（空间换时间的体现）
 
 // 客户数据：客户端socket地址、待写到客户端的数据、从客户端读入的数据
 struct client_data{
@@ -58,8 +58,8 @@ int main(int argc, char* argv[]){
     // 创建users数组，分配FD_LIMIT个client_data对象
     // 可以预期，每个可能的socket连接都可以获得一个这样的对象
     // 并且socket的值可以直接用来索引（作为数组下标） socket连接对应的client_data对象
-    // 这是将socket和客户数据相关联的简单而高效的方式
-    client_data* users = new client_data[FD_LIMIT];
+    // 这是将socket和客户数据相关联的简单而高效的方式（空间换时间的体现）
+    client_data* users = new client_data[FD_LIMIT]; 
     // 尽管我们分配了足够多的client对象，但为了提高poll性能，仍然有必要限制用户数量
     pollfd fds[USER_LIMIT + 1]; // 之所以 +1 是因为还要监听listenfd对应的文件描述符
 
@@ -154,14 +154,14 @@ int main(int argc, char* argv[]){
                         user_counter--;
                     }
                 }
-                else if(ret == 0){ }
+                else if(ret == 0){ } // 读到0字节，不做任何处理
                 else{
                     // 接收到客户端数据，通知其他socket连接准备写数据
                     for(int j=1; j<=user_counter; ++j){
-                        if(fds[j].fd == connfd){ continue; }
+                        if(fds[j].fd == connfd){ continue; } // 发数据的那个client不用通知自己
                         fds[j].events |= ~POLLIN; // 不监听对用户连接的可读时机了
                         fds[j].events |= POLLOUT; // 监听服务器向用户连接可写的时机，并初始化write_buf指针
-                        users[fds[j].fd].write_buf = users[connfd].buf;
+                        users[fds[j].fd].write_buf = users[connfd].buf; // 将从connfd发来的数据拷贝到connfd之外的连接，其实是共享数据
                     }
                 }
             }
@@ -169,7 +169,7 @@ int main(int argc, char* argv[]){
             // 情况四：监听到我方写数据
             else if(fds[i].revents & POLLOUT){
                 int connfd = fds[i].fd;
-                if(!users[connfd].write_buf){ continue; }
+                if(!users[connfd].write_buf){ continue; } // 数据没准备好，跳过
                 ret = send(connfd, users[connfd].write_buf, strlen(users[connfd].write_buf), 0);
                 users[connfd].write_buf = NULL;
                 // 写完数据后需要重新注册fds[i]上的可读事件

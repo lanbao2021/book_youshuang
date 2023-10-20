@@ -105,7 +105,7 @@ int main(int argc, char* argv[]){
     ret = socketpair(PF_UNIX, SOCK_STREAM, 0, pipefd);
     assert(ret != -1);
 
-    setnonblocking(pipefd[1]); // 写端为啥也要nonblock?
+    setnonblocking(pipefd[1]); // 写端为啥也要nonblock?更加高效，不要傻等
     addfd(epollfd, pipefd[0]);  
 
     // 设置信号处理函数
@@ -119,6 +119,7 @@ int main(int argc, char* argv[]){
 
     while(!stop_server){
         int number = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);
+        
         if((number < 0) && (errno != EINTR)){
             printf("epoll failure\n");
             break;
@@ -181,7 +182,7 @@ int main(int argc, char* argv[]){
                 if(ret < 0){
                     // 发生读错误，关闭连接，移除对应定时器
                     if(errno != EAGAIN){
-                        cb_func(&users[sockfd]);
+                        cb_func(&users[sockfd]); // 这里不应该是timer->cb_func(&users[sockfd])吗？可以，但是这里的cb_func是一个全局函数，而不是类的成员函数
                         if(timer){ timer_lst.del_timer(timer); }
                     }
                 }
@@ -207,7 +208,7 @@ int main(int argc, char* argv[]){
         // 最后处理定时事件，因为I/O事件有更高的优先级
         // 当然，这样做将导致定时任务不能精确地按照预期的时间执行
         if(timeout){
-            timer_handler();
+            timer_handler(); // 这里会调用timer_lst.tick()，而timer_lst.tick()会调用timer->cb_func(&users[sockfd])
             timeout = false;
         }
     }

@@ -198,7 +198,7 @@ int main(int argc, char* argv[]){
     assert(epollfd != -1);
     addfd(epollfd, listenfd);
 
-    ret = socketpair(PF_UNIX, SOCK_STREAM, 0, sig_pipefd);
+    ret = socketpair(PF_UNIX, SOCK_STREAM, 0, sig_pipefd); // 创建主进程用来接收信号的管道
     assert(ret != -1);
     setnonblocking(sig_pipefd[1]);
     addfd(epollfd, sig_pipefd[0]);
@@ -206,8 +206,9 @@ int main(int argc, char* argv[]){
     addsig(SIGCHLD, sig_handler);
     addsig(SIGTERM, sig_handler);
     addsig(SIGINT, sig_handler);
+    
     // 这个SIG_IGN放在这里啥意思，没懂
-    // 感觉是指SIGPIPE信号进来后忽略这个信号？
+    // 感觉是指SIGPIPE信号进来后忽略这个信号？是的，SIG_IGN表示忽略该信号
     addsig(SIGPIPE, SIG_IGN); 
     bool stop_server = false;
     bool terminate = false;
@@ -248,8 +249,11 @@ int main(int argc, char* argv[]){
                 users[user_count].connfd = connfd;
                 // 在主进程和子进程间建立管道，以传递必要的数据
                 ret = socketpair(PF_UNIX, SOCK_STREAM, 0, users[user_count].pipefd);
+                
                 assert(ret != -1);
-                pid_t pid = fork();
+                
+                pid_t pid = fork(); // 子进程开始创建
+                 
                 if(pid < 0){
                     close(connfd);
                     continue;
@@ -257,16 +261,19 @@ int main(int argc, char* argv[]){
                 else if(pid == 0){
                     // 子进程的操作
                     // 这些关闭的东西不是真的关闭了，而是引用计数-1
-                    close(epollfd);
-                    close(listenfd);
-                    close(users[user_count].pipefd[0]); 
-                    close(sig_pipefd[0]);
-                    close(sig_pipefd[1]);
-                    run_child(user_count, users, share_mem);
+                    close(epollfd); // 子进程不用父进程的epollfd
+                    close(listenfd); // 子进程不用父进程的listenfd
+                    close(users[user_count].pipefd[0]);  // 子进程不用父进程的管道读端
+                    close(sig_pipefd[0]); // 子进程不用父进程的信号管道读端
+                    close(sig_pipefd[1]); // 子进程不用父进程的信号管道写端
+                    
+                    run_child(user_count, users, share_mem); // 运行子进程
+
                     // 有个问题，这边把内存释放了那别的子进程怎么用？还是说这个也是引用计数？
                     // 应该是引用计数，可以参考书上13.6.4的最后一段话
                     // “当所有使用该共享内存对象的进程都使用munmap(书上打错字了？是的)将它从进程中分离之后，系统将销毁这个共享内存对象所占据的资源”
                     munmap((void*)share_mem, USER_LIMIT*BUFFER_SIZE); 
+                    
                     exit(0); // 子进程止步于此了，后面的代码不是在主进程里执行的
                 }
                 else{

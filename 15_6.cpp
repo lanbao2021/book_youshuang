@@ -119,7 +119,7 @@ int main(int argc, char* argv[]){
                 users[sockfd].close_conn();
             }
             else if(events[i].events & EPOLLIN){
-                // 根据读的结果决定是将任务添加到线程池，还是关闭连接
+                // 根据读的结果决定是将任务添加到请求队列，还是关闭连接
                 if(users[sockfd].read()){ pool->append(users + sockfd); }
                 else{ users[sockfd].close_conn(); }
             }

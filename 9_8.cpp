@@ -46,10 +46,10 @@ int main(int argc, char* argv[]){
     bzero(&address, sizeof(address));
     address.sin_family = AF_INET;
     inet_pton(AF_INET, ip, &address.sin_addr);
-    address.sin_port = htons(port);
+    address.sin_port = htons(port); // 这里的port是TCP的端口号，跟后面的UDP一样
 
     // 创建TCP socket，并将其绑定到端口号上
-    int listenfd = socket(PF_INET, SOCK_STREAM, 0);
+    int listenfd = socket(PF_INET, SOCK_STREAM, 0); // SOCK_STREAM表示TCP socket
     assert(listenfd >= 0);
 
     ret = bind(listenfd, (struct sockaddr*)&address, sizeof(address));
@@ -64,15 +64,15 @@ int main(int argc, char* argv[]){
     bzero(&address, sizeof(address)); 
     address.sin_family = AF_INET;
     inet_pton(AF_INET, ip, &address.sin_addr);
-    address.sin_port = htons(port);
-    int udpfd = socket(PF_INET, SOCK_DGRAM, 0);
+    address.sin_port = htons(port); // 这里的port是UDP的端口号，跟前面的TCP一样
+    int udpfd = socket(PF_INET, SOCK_DGRAM, 0); // SOCK_DGRAM表示UDP socket
     assert(udpfd >= 0);
 
-    ret = bind(udpfd, (struct sockaddr*)&address, sizeof(address));
+    ret = bind(udpfd, (struct sockaddr*)&address, sizeof(address)); // 绑定端口
     assert(ret != -1);
 
     epoll_event events[MAX_EVENT_NUMBER];
-    int epollfd = epoll_create(5);
+    int epollfd = epoll_create(5); // 创建epoll对象，参数5被忽略
     assert(epollfd != -1);
 
     // 注册TCP sock和UDP socket上的可读事件
@@ -102,19 +102,19 @@ int main(int argc, char* argv[]){
                 struct sockaddr_in client_address;
                 socklen_t client_addrlength = sizeof(client_address);
 
-                ret = recvfrom(udpfd, buf, UDP_BUFFER_SIZE-1, 0, (struct sockaddr*)&client_address, &client_addrlength);
+                ret = recvfrom(udpfd, buf, UDP_BUFFER_SIZE-1, 0, (struct sockaddr*)&client_address, &client_addrlength); // 读取数据，UDP连接需要提供地址信息
                 if(ret > 0){
-                    sendto(udpfd, buf, UDP_BUFFER_SIZE-1, 0, (struct sockaddr*)&client_address, client_addrlength);
+                    sendto(udpfd, buf, UDP_BUFFER_SIZE-1, 0, (struct sockaddr*)&client_address, client_addrlength); // 发送数据，UDP连接需要提供地址信息
                 }
             }
-            else if(events[i].events & EPOLLIN){
+            else if(events[i].events & EPOLLIN){ // TCP连接来数据了
                 char buf[TCP_BUFFER_SIZE];
-                // 为啥UDP读数据只要recvfrom一次就够了？
+                // 为啥上面的UDP读数据只要recvfrom一次就够了？
                 while(1){
                     memset(buf, '\0', TCP_BUFFER_SIZE);
                     ret = recv(sockfd, buf, TCP_BUFFER_SIZE-1, 0);
                     if(ret < 0){
-                        if((errno == EAGAIN) || (errno == EWOULDBLOCK)){ break; }
+                        if((errno == EAGAIN) || (errno == EWOULDBLOCK)){ break; } // 下次再读
                         close(sockfd);
                         break;
                     }
